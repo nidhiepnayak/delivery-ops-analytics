@@ -1,0 +1,230 @@
+<title>Delivery Ops Dashboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: control strip, KPI row, two-column grid of "what drives late orders" cards, full-width city ranking, action table */
+:root {
+  --bg: #f6f6f3;
+  --surface: #fcfcfb;
+  --line: #e1e0d9;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #c3c2b7;
+  --accent: #2a78d6;
+  --late: #c4314b;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211; --surface: #1a1a19; --line: #2c2c2a; --text: #f0efec; --text-2: #c3c2b7;
+    --muted: #4a4945; --accent: #3987e5; --late: #e66767; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121211; --surface: #1a1a19; --line: #2c2c2a; --text: #f0efec; --text-2: #c3c2b7;
+  --muted: #4a4945; --accent: #3987e5; --late: #e66767; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); margin: 0 0 4px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 4vw, 32px); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.sub { margin: 6px 0 0; color: var(--text-2); max-width: 62ch; }
+.filter { display: grid; gap: 4px; }
+.filter label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+select {
+  font: inherit; font-size: 15px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); min-width: 200px;
+}
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.kpi .label { font-size: 13px; color: var(--text-2); }
+.kpi .value { font-family: var(--font-display); font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums; }
+.kpi .note { font-size: 13px; color: var(--text-2); }
+.kpi.alert .value { color: var(--late); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-weight: 500; font-size: 17px; margin: 0; text-wrap: balance; }
+.card .cap { margin: 2px 0 10px; font-size: 14px; color: var(--text-2); min-height: 21px; }
+.chart { position: relative; height: 210px; }
+.chart.tall { height: 560px; }
+.section-title { font-family: var(--font-display); font-weight: 700; font-size: 19px; margin: 8px 0 0; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--late); font-weight: 600; }
+footer { font-size: 13px; color: var(--text-2); }
+footer a { color: var(--accent); }
+@media (max-width: 760px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid { grid-template-columns: 1fr; }
+  select { min-width: 0; width: 100%; }
+  .filter { width: 100%; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">On-demand delivery operations · 30-minute promise</p>
+      <h1>What makes deliveries late?</h1>
+      <p class="sub">45,593 orders across 22 Indian cities and 1,320 delivery partners (Feb–Apr 2022). An order counts as late when it takes more than 30 minutes.</p>
+    </div>
+    <div class="filter">
+      <label for="city">City</label>
+      <select id="city"></select>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Headline numbers">
+    <div class="kpi"><div class="label">Orders</div><div class="value" id="k-orders">–</div><div class="note" id="k-orders-n">&nbsp;</div></div>
+    <div class="kpi"><div class="label">Average delivery time</div><div class="value" id="k-avg">–</div><div class="note">minutes</div></div>
+    <div class="kpi alert"><div class="label">Late rate</div><div class="value" id="k-late">–</div><div class="note">over 30 minutes</div></div>
+    <div class="kpi"><div class="label">Delivery partners</div><div class="value" id="k-partners">–</div><div class="note">active in period</div></div>
+  </section>
+
+  <h2 class="section-title">What drives late orders</h2>
+  <section class="grid">
+    <div class="card"><h2>Road traffic</h2><p class="cap" id="cap-traffic"></p><div class="chart"><canvas id="c-traffic" role="img" aria-label="Late rate by traffic level"></canvas></div></div>
+    <div class="card"><h2>Time of day</h2><p class="cap" id="cap-slot"></p><div class="chart"><canvas id="c-slot" role="img" aria-label="Late rate by time of day"></canvas></div></div>
+    <div class="card"><h2>Orders stacked on one partner</h2><p class="cap" id="cap-stack"></p><div class="chart"><canvas id="c-stack" role="img" aria-label="Late rate by number of stacked orders"></canvas></div></div>
+    <div class="card"><h2>Distance to customer</h2><p class="cap" id="cap-distance"></p><div class="chart"><canvas id="c-distance" role="img" aria-label="Late rate by distance"></canvas></div></div>
+    <div class="card"><h2>Weather</h2><p class="cap" id="cap-weather"></p><div class="chart"><canvas id="c-weather" role="img" aria-label="Late rate by weather"></canvas></div></div>
+    <div class="card"><h2>Partner rating</h2><p class="cap" id="cap-rating"></p><div class="chart"><canvas id="c-rating" role="img" aria-label="Late rate by partner rating"></canvas></div></div>
+  </section>
+
+  <div class="card">
+    <h2>Late rate by city</h2>
+    <p class="cap">All 22 cities sit between 29% and 33%. Conditions matter far more than location. Selected city in blue.</p>
+    <div class="chart tall"><canvas id="c-city" role="img" aria-label="Late rate by city"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Recommended actions</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Problem</th><th>Late rate</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Dinner rush (6–10 pm): ~42% of orders, 3 in 4 in jammed traffic</td><td class="num">46%</td><td>Add partners and position them inside busy zones before 6 pm</td></tr>
+          <tr><td>Partner carrying 2+ extra orders</td><td class="num">100%</td><td>Cap batching at one extra order per partner</td></tr>
+          <tr><td>Customer more than 10 km away</td><td class="num">45%</td><td>Tighten service radius; dispatch from the nearest micro-market</td></tr>
+          <tr><td>Festival days</td><td class="num">100%</td><td>Schedule surge staffing ahead of known festival dates</td></tr>
+          <tr><td>Partners rated below 4.5</td><td class="num">84%</td><td>Flag early for coaching and lighter order loads</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>Data: <a href="https://www.kaggle.com/datasets/gauravmalik26/food-delivery-dataset">Food Delivery Dataset (Kaggle)</a>. Analysis and SQL: <a href="https://github.com/nidhiepnayak/delivery-ops-analytics">github.com/nidhiepnayak/delivery-ops-analytics</a>. Built by Nidhie.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const DATA = {"cities":["Agra","Aurangabad","Bengaluru","Bhopal","Chennai","Coimbatore","Dehradun","Goa","Hyderabad","Indore","Jaipur","Kanpur","Kochi","Kolkata","Ludhiana","Mumbai","Mysuru","Prayagraj","Pune","Ranchi","Surat","Vadodara"],"dims":{"traffic":{"cats":["Low","Medium","High","Jam"],"rows":{"Agra":[[257,18,5475],[170,52,4411],[64,21,1831],[265,144,8454]],"Aurangabad":[[241,27,5175],[161,62,4483],[82,23,2172],[215,110,6782]],"Bengaluru":[[1114,99,23853],[745,232,19671],[297,101,8140],[983,480,30020]],"Bhopal":[[244,19,5227],[156,54,4238],[72,22,1885],[212,120,6928]],"Chennai":[[1052,81,22349],[731,225,19420],[312,106,8605],[999,501,31216]],"Coimbatore":[[1090,85,23223],[766,242,20615],[300,108,8242],[971,489,30153]],"Dehradun":[[247,26,5285],[175,64,4685],[73,23,1982],[232,127,7435]],"Goa":[[244,18,5178],[183,62,5009],[69,18,1752],[207,106,6459]],"Hyderabad":[[1053,77,22276],[795,253,21141],[334,120,9206],[961,507,30458]],"Indore":[[1082,82,22840],[757,239,20031],[308,108,8580],[970,484,29924]],"Jaipur":[[1138,107,24632],[852,296,23083],[297,108,7966],[1120,575,35281]],"Kanpur":[[263,19,5582],[181,63,5026],[56,20,1574],[233,113,7126]],"Kochi":[[246,20,5329],[158,41,4121],[68,30,1956],[223,107,6896]],"Kolkata":[[226,16,4826],[181,58,4869],[67,24,1857],[217,105,6632]],"Ludhiana":[[247,25,5253],[178,58,4627],[64,19,1603],[266,135,8353]],"Mumbai":[[1105,97,23601],[766,242,20263],[326,101,8752],[928,463,28765]],"Mysuru":[[1054,67,22002],[786,239,20602],[314,104,8529],[967,485,30058]],"Prayagraj":[[227,20,4850],[204,80,5739],[71,23,2059],[229,115,7105]],"Pune":[[1061,82,22717],[745,246,19929],[308,85,8183],[974,500,30437]],"Ranchi":[[1076,67,22394],[801,269,21313],[327,120,9049],[977,496,30749]],"Surat":[[1101,86,23401],[740,255,20009],[312,90,8155],[997,486,30662]],"Vadodara":[[1109,80,23681],[716,223,18996],[304,111,8459],[997,514,31038]]}},"slot":{"cats":["Breakfast (6-11)","Lunch (11-15)","Evening snack (15-18)","Dinner (18-22)","Late night (22-6)"],"rows":{"Agra":[[84,2,1669],[68,20,1896],[74,21,1891],[350,172,10701],[165,18,3694]],"Aurangabad":[[78,4,1534],[82,23,2155],[81,27,2238],[280,134,8497],[157,25,3568]],"Bengaluru":[[432,11,8631],[302,97,8152],[415,120,10821],[1256,564,37141],[652,98,14911]],"Bhopal":[[88,0,1664],[72,22,1872],[74,23,2044],[280,143,8669],[151,21,3511]],"Chennai":[[393,6,7754],[315,101,8542],[396,125,10510],[1274,576,38411],[639,88,14511]],"Coimbatore":[[417,8,8243],[308,104,8315],[415,121,10952],[1258,589,37992],[666,88,15132]],"Dehradun":[[87,0,1641],[71,21,1897],[97,31,2507],[291,149,9011],[154,27,3586]],"Goa":[[100,4,2023],[69,18,1742],[96,30,2588],[277,127,8288],[142,17,3218]],"Hyderabad":[[394,9,7658],[331,113,8970],[396,120,10358],[1304,618,39555],[640,75,14439]],"Indore":[[417,8,7968],[302,103,8352],[410,127,10676],[1259,561,37379],[654,91,15055]],"Jaipur":[[407,18,8121],[299,104,7956],[485,156,12806],[1425,676,43485],[715,107,16546]],"Kanpur":[[98,2,1944],[55,17,1511],[111,37,3035],[286,133,8596],[160,19,3621]],"Kochi":[[87,0,1714],[68,28,1917],[74,15,1845],[295,127,8819],[155,20,3565]],"Kolkata":[[83,0,1596],[69,22,1856],[97,31,2605],[288,125,8518],[138,19,3205]],"Ludhiana":[[91,1,1703],[65,19,1638],[102,32,2605],[323,152,9796],[151,26,3513]],"Mumbai":[[414,9,7976],[323,96,8513],[407,123,10598],[1219,550,36300],[692,102,15978]],"Mysuru":[[402,8,7815],[313,101,8422],[411,105,10335],[1282,590,38514],[641,71,14214]],"Prayagraj":[[77,3,1515],[73,23,2085],[120,48,3370],[296,138,8956],[140,18,3163]],"Pune":[[398,6,7716],[307,82,8106],[385,120,10107],[1267,594,38222],[652,86,14983]],"Ranchi":[[403,7,7783],[326,112,8856],[445,138,11607],[1262,599,38429],[662,75,14825]],"Surat":[[402,7,7775],[314,88,8112],[397,127,10578],[1264,582,37772],[691,90,15790]],"Vadodara":[[404,11,8002],[297,104,8195],[372,111,9686],[1264,590,38030],[700,84,15924]]}},"stack":{"cats":["Single order","+1 order","+2 orders","+3 orders"],"rows":{"Agra":[[227,48,5381],[483,147,12975],[34,34,1395],[7,7,329]],"Aurangabad":[[221,40,5050],[431,145,11842],[32,32,1310],[4,4,186]],"Bengaluru":[[989,194,22960],[1995,579,52770],[124,124,4967],[24,24,1145]],"Bhopal":[[225,36,5171],[406,135,11137],[43,43,1785],[4,4,183]],"Chennai":[[943,152,21274],[1948,586,52619],[153,153,6228],[25,25,1197]],"Coimbatore":[[1004,177,22895],[1956,595,52708],[119,119,4830],[34,34,1635]],"Dehradun":[[233,42,5336],[439,147,11949],[43,43,1728],[6,6,273]],"Goa":[[235,41,5437],[416,122,11061],[31,31,1206],[6,6,298]],"Hyderabad":[[951,186,21942],[2003,596,53536],[145,145,5952],[26,26,1221]],"Indore":[[976,168,21975],[1947,588,52224],[137,137,5583],[18,18,870]],"Jaipur":[[1022,190,23531],[2134,686,58043],[183,183,7354],[27,27,1287]],"Kanpur":[[203,33,4525],[482,142,12970],[38,38,1525],[4,4,192]],"Kochi":[[199,38,4625],[442,120,11683],[32,32,1318],[8,8,374]],"Kolkata":[[201,38,4628],[452,131,12017],[27,27,1150],[9,9,433]],"Ludhiana":[[232,41,5126],[470,155,12746],[33,33,1289],[6,6,300]],"Mumbai":[[979,167,22027],[1992,604,53489],[114,114,4542],[26,26,1237]],"Mysuru":[[1062,189,24258],[1885,559,50392],[129,129,5186],[19,19,919]],"Prayagraj":[[219,36,4999],[458,160,12769],[36,36,1479],[7,7,330]],"Pune":[[974,192,22543],[1932,570,51936],[131,131,5310],[24,24,1122]],"Ranchi":[[1018,166,22783],[1966,611,53148],[138,138,5591],[29,29,1430]],"Surat":[[1008,188,23433],[1965,573,51991],[130,130,5239],[21,21,1004]],"Vadodara":[[974,192,22542],[1957,570,52230],[133,133,5336],[27,27,1298]]}},"distance":{"cats":["Under 5 km","5-10 km","10-15 km","15+ km"],"rows":{"Agra":[[134,16,3023],[135,31,3341],[140,61,4046],[141,66,4240]],"Aurangabad":[[153,21,3487],[154,42,3867],[152,74,4604],[96,47,2946]],"Bengaluru":[[885,120,19710],[863,160,20578],[864,384,25538],[583,268,17413]],"Bhopal":[[127,16,2858],[133,33,3239],[124,53,3694],[94,50,2981]],"Chennai":[[853,101,19063],[867,183,21290],[852,394,25567],[573,248,16979]],"Coimbatore":[[863,99,19014],[883,177,21342],[860,403,25854],[564,258,17137]],"Dehradun":[[131,16,2845],[113,26,2767],[123,56,3667],[125,67,3827]],"Goa":[[174,32,4062],[169,30,3992],[164,64,4853],[102,51,2986]],"Hyderabad":[[861,115,19229],[861,189,21159],[892,420,26962],[567,246,16728]],"Indore":[[865,108,19023],[853,190,20844],[867,377,25732],[574,249,16902]],"Jaipur":[[865,120,19362],[853,187,20775],[854,391,25389],[871,401,26375]],"Kanpur":[[166,19,3653],[174,37,4240],[161,70,4780],[175,70,5014]],"Kochi":[[185,23,4229],[193,40,4637],[195,80,5715],[128,58,3887]],"Kolkata":[[192,23,4322],[186,45,4616],[198,92,5947],[124,46,3570]],"Ludhiana":[[176,18,3741],[173,35,4195],[169,85,5067],[169,79,5020]],"Mumbai":[[876,102,19147],[858,167,20987],[866,400,25721],[573,251,16797]],"Mysuru":[[828,97,18240],[840,166,20270],[808,375,24228],[536,227,15644]],"Prayagraj":[[137,21,3132],[140,33,3596],[142,74,4399],[149,67,4439]],"Pune":[[851,105,18802],[856,170,20918],[855,389,25621],[570,264,17169]],"Ranchi":[[715,96,15976],[711,157,17463],[687,321,20597],[451,206,13637]],"Surat":[[847,81,18337],[868,186,21138],[881,389,26050],[591,269,17597]],"Vadodara":[[419,52,9536],[424,106,10496],[439,188,12895],[294,140,9093]]}},"weather":{"cats":["Sunny","Windy","Stormy","Sandstorms","Cloudy","Fog"],"rows":{"Agra":[[113,15,2480],[124,38,3381],[120,30,3179],[136,41,3499],[130,46,3596],[131,65,3993]],"Aurangabad":[[97,6,2041],[121,36,3294],[129,38,3375],[122,35,3144],[109,53,3246],[120,53,3466]],"Bengaluru":[[523,73,11422],[526,142,13581],[515,130,13293],[534,136,13893],[514,219,14657],[527,212,14838]],"Bhopal":[[108,15,2310],[101,28,2665],[110,25,2743],[125,31,3236],[116,56,3568],[123,60,3733]],"Chennai":[[480,60,10498],[502,149,13269],[553,127,14149],[541,147,14156],[510,214,14828],[508,216,14690]],"Coimbatore":[[505,67,11031],[528,138,13914],[546,129,13910],[493,126,12874],[500,226,14504],[555,238,16000]],"Dehradun":[[122,14,2561],[118,33,3075],[106,33,2848],[104,30,2714],[150,65,4305],[126,65,3864]],"Goa":[[120,18,2718],[114,28,2908],[117,34,3160],[129,32,3304],[115,45,3239],[105,46,2994]],"Hyderabad":[[540,64,11774],[533,133,13858],[532,156,14189],[522,137,13485],[496,218,14309],[520,249,15466]],"Indore":[[505,60,10991],[486,126,12754],[567,152,14587],[489,135,12742],[526,214,14859],[544,226,15442]],"Jaipur":[[520,67,11311],[602,168,16036],[581,140,14973],[543,144,14080],[588,284,17436],[573,283,17126]],"Kanpur":[[110,18,2416],[117,31,3056],[128,35,3357],[129,28,3240],[121,56,3602],[127,47,3612]],"Kochi":[[110,15,2421],[108,25,2821],[127,27,3144],[107,25,2760],[121,55,3553],[121,51,3583]],"Kolkata":[[111,12,2393],[130,35,3411],[115,25,2911],[116,27,2977],[99,50,2964],[118,53,3457]],"Ludhiana":[[128,23,2933],[119,31,3000],[132,31,3368],[128,35,3326],[127,63,3760],[119,53,3392]],"Mumbai":[[512,66,11123],[508,134,13177],[484,108,12231],[520,121,13112],[557,241,16051],[544,233,15687]],"Mysuru":[[521,52,11097],[497,130,12931],[525,137,13569],[517,137,13498],[538,228,15453],[523,211,14643]],"Prayagraj":[[126,17,2899],[119,30,3060],[119,29,3037],[121,36,3247],[123,69,3896],[122,57,3594]],"Pune":[[492,72,11026],[535,138,13827],[486,141,12822],[534,118,13523],[545,228,15693],[496,216,14375]],"Ranchi":[[515,65,11378],[536,139,13830],[503,127,13066],[546,148,14195],[527,226,15035],[554,247,16001]],"Surat":[[508,55,11092],[514,129,13295],[540,145,14117],[513,124,13198],[531,231,15104],[544,233,15421]],"Vadodara":[[518,58,11291],[484,130,12711],[551,138,14228],[526,152,13734],[493,212,14263],[554,238,15947]]}},"rating":{"cats":["Below 4.0","4.0-4.4","4.5-4.7","4.8-5.0"],"rows":{"Agra":[[23,23,841],[110,84,3687],[284,52,6991],[318,70,8129]],"Aurangabad":[[18,18,653],[121,100,4238],[270,43,6566],[263,51,6400]],"Bengaluru":[[101,98,3594],[463,367,15907],[1210,195,29202],[1277,228,30799]],"Bhopal":[[15,15,552],[117,99,4080],[257,46,6373],[267,46,6497]],"Chennai":[[104,96,3772],[473,380,16424],[1138,177,27773],[1289,236,31363]],"Coimbatore":[[97,93,3588],[494,388,16924],[1236,204,30098],[1227,222,29759]],"Dehradun":[[21,21,788],[117,101,4152],[278,51,6706],[282,55,6964]],"Goa":[[21,21,791],[94,74,3224],[268,40,6394],[293,61,7284]],"Hyderabad":[[91,90,3349],[473,390,16480],[1255,205,30200],[1227,243,30415]],"Indore":[[98,95,3697],[471,380,16325],[1202,190,28774],[1261,221,30333]],"Jaipur":[[103,101,3807],[516,442,18301],[1325,251,32967],[1365,259,33249]],"Kanpur":[[19,19,683],[110,94,3934],[281,45,6735],[297,49,7267]],"Kochi":[[14,14,505],[98,79,3458],[276,47,6703],[289,50,7138]],"Kolkata":[[19,19,695],[105,82,3568],[254,41,6184],[288,54,7138]],"Ludhiana":[[35,35,1293],[110,91,3798],[258,40,6160],[326,64,7947]],"Mumbai":[[85,84,3140],[483,390,16439],[1225,193,29476],[1246,209,29919]],"Mysuru":[[97,94,3571],[428,336,14740],[1249,199,30145],[1260,239,30437]],"Prayagraj":[[22,22,802],[100,80,3462],[261,64,6804],[317,63,7863]],"Pune":[[94,92,3407],[437,350,15006],[1189,200,29022],[1271,240,31214]],"Ranchi":[[101,100,3849],[459,400,16176],[1238,191,29754],[1287,239,31408]],"Surat":[[90,88,3311],[453,379,15684],[1237,181,29391],[1269,238,31076]],"Vadodara":[[99,98,3663],[463,372,15961],[1194,195,28821],[1266,232,31010]]}},"city":{"cats":["Agra","Aurangabad","Bengaluru","Bhopal","Chennai","Coimbatore","Dehradun","Goa","Hyderabad","Indore","Jaipur","Kanpur","Kochi","Kolkata","Ludhiana","Mumbai","Mysuru","Prayagraj","Pune","Ranchi","Surat","Vadodara"],"rows":{"Agra":[[763,237,20329],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Aurangabad":[[0,0,0],[703,224,18734],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Bengaluru":[[0,0,0],[0,0,0],[3195,932,83239],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Bhopal":[[0,0,0],[0,0,0],[0,0,0],[691,219,18516],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Chennai":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3145,926,82899],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Coimbatore":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3170,937,83347],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Dehradun":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[737,243,19661],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Goa":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[709,207,18573],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Hyderabad":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3181,970,84078],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Indore":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3159,924,82501],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Jaipur":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3443,1099,91901],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Kanpur":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[740,218,19498],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Kochi":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[701,201,18468],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Kolkata":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[700,206,18455],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Ludhiana":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[758,238,19917],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Mumbai":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3173,920,82652],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Mysuru":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3171,910,82462],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Prayagraj":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[740,241,20002],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],"Pune":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3132,928,82510],[0,0,0],[0,0,0],[0,0,0]],"Ranchi":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3229,962,84729],[0,0,0],[0,0,0]],"Surat":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3187,925,83122],[0,0,0]],"Vadodara":[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[3166,939,83257]]}}},"partners":{"Agra":60,"Aurangabad":60,"Bengaluru":60,"Bhopal":60,"Chennai":60,"Coimbatore":60,"Dehradun":60,"Goa":60,"Hyderabad":60,"Indore":60,"Jaipur":60,"Kanpur":60,"Kochi":60,"Kolkata":60,"Ludhiana":60,"Mumbai":60,"Mysuru":60,"Prayagraj":60,"Pune":60,"Ranchi":60,"Surat":60,"Vadodara":60}};
+const ALL = "All cities";
+const charts = {};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = n => n.toLocaleString("en-IN");
+
+function sumRows(dim, city) {
+  const d = DATA.dims[dim];
+  const cities = city === ALL ? Object.keys(d.rows) : [city];
+  return d.cats.map((cat, i) => {
+    let n = 0, late = 0, mins = 0;
+    for (const c of cities) { const r = d.rows[c]?.[i]; if (r) { n += r[0]; late += r[1]; mins += r[2]; } }
+    return { cat, n, late, mins, pct: n ? 100 * late / n : null };
+  }).filter(r => r.n > 0);
+}
+
+const valueLabels = {
+  id: "valueLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.fillStyle = css("--text");
+    ctx.font = "13px " + css("--font-body");
+    ctx.textBaseline = "middle";
+    chart.getDatasetMeta(0).data.forEach((bar, i) => {
+      const v = chart.data.datasets[0].data[i];
+      if (v != null) ctx.fillText(Math.round(v) + "%", bar.x + 6, bar.y);
+    });
+    ctx.restore();
+  }
+};
+
+function drawBar(id, rows, highlight, max) {
+  const colors = rows.map(r => highlight(r) ? css("--accent") : css("--muted"));
+  const cfg = {
+    type: "bar",
+    data: { labels: rows.map(r => r.cat.replace("Evening snack", "Evening")), datasets: [{ data: rows.map(r => r.pct), backgroundColor: colors,
+      borderRadius: { topRight: 4, bottomRight: 4 }, borderSkipped: false, maxBarThickness: 22, barPercentage: .7 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 40 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const r = rows[c.dataIndex];
+          return [`${r.pct.toFixed(1)}% late`, `${fmt(r.n)} orders`, `avg ${(r.mins / r.n).toFixed(1)} min`];
+        } } }
+      },
+      scales: {
+        x: { min: 0, max, ticks: { stepSize: max >= 100 ? 25 : 20, callback: v => v + "%", color: css("--text-2") }, grid: { color: css("--line") }, border: { display: false } },
+        y: { ticks: { color: css("--text-2"), font: { size: innerWidth < 500 ? 12 : 13 } }, grid: { display: false }, border: { color: css("--line") } }
+      }
+    },
+    plugins: [valueLabels]
+  };
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function caption(rows) {
+  const s = [...rows].sort((a, b) => b.pct - a.pct);
+  const hi = s[0], lo = s[s.length - 1];
+  return `${hi.cat}: ${Math.round(hi.pct)}% late vs ${lo.cat}: ${Math.round(lo.pct)}%`;
+}
+
+function render() {
+  const city = document.getElementById("city").value;
+  Chart.defaults.font.family = css("--font-body");
+
+  const all = sumRows("city", city);
+  const n = all.reduce((a, r) => a + r.n, 0), late = all.reduce((a, r) => a + r.late, 0), mins = all.reduce((a, r) => a + r.mins, 0);
+  document.getElementById("k-orders").textContent = fmt(n);
+  document.getElementById("k-orders-n").textContent = city === ALL ? "22 cities" : city;
+  document.getElementById("k-avg").textContent = (mins / n).toFixed(1);
+  document.getElementById("k-late").textContent = (100 * late / n).toFixed(1) + "%";
+  document.getElementById("k-partners").textContent = fmt(city === ALL
+    ? Object.values(DATA.partners).reduce((a, b) => a + b, 0) : DATA.partners[city]);
+
+  for (const dim of ["traffic", "slot", "stack", "distance", "weather", "rating"]) {
+    const rows = sumRows(dim, city);
+    const top = Math.max(...rows.map(r => r.pct));
+    drawBar("c-" + dim, rows, r => r.pct >= top - 0.01 || (dim !== "slot" && r.pct >= 40), top > 60 ? 100 : 60);
+    document.getElementById("cap-" + dim).textContent = caption(rows);
+  }
+
+  const cityRows = sumRows("city", ALL).sort((a, b) => b.pct - a.pct);
+  drawBar("c-city", cityRows, r => r.cat === city, 40);
+  charts["c-city"].options.scales.x.ticks.stepSize = 10; charts["c-city"].update();
+}
+
+const sel = document.getElementById("city");
+[ALL, ...DATA.cities].forEach(c => sel.add(new Option(c, c)));
+try { const saved = localStorage.getItem("city"); if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved; } catch (e) {}
+sel.addEventListener("change", () => { try { localStorage.setItem("city", sel.value); } catch (e) {} render(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+render();
+</script>

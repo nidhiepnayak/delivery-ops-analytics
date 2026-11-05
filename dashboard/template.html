@@ -1,0 +1,230 @@
+<title>Delivery Ops Dashboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: control strip, KPI row, two-column grid of "what drives late orders" cards, full-width city ranking, action table */
+:root {
+  --bg: #f6f6f3;
+  --surface: #fcfcfb;
+  --line: #e1e0d9;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #c3c2b7;
+  --accent: #2a78d6;
+  --late: #c4314b;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211; --surface: #1a1a19; --line: #2c2c2a; --text: #f0efec; --text-2: #c3c2b7;
+    --muted: #4a4945; --accent: #3987e5; --late: #e66767; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121211; --surface: #1a1a19; --line: #2c2c2a; --text: #f0efec; --text-2: #c3c2b7;
+  --muted: #4a4945; --accent: #3987e5; --late: #e66767; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); margin: 0 0 4px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 4vw, 32px); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.sub { margin: 6px 0 0; color: var(--text-2); max-width: 62ch; }
+.filter { display: grid; gap: 4px; }
+.filter label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+select {
+  font: inherit; font-size: 15px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); min-width: 200px;
+}
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.kpi .label { font-size: 13px; color: var(--text-2); }
+.kpi .value { font-family: var(--font-display); font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums; }
+.kpi .note { font-size: 13px; color: var(--text-2); }
+.kpi.alert .value { color: var(--late); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-weight: 500; font-size: 17px; margin: 0; text-wrap: balance; }
+.card .cap { margin: 2px 0 10px; font-size: 14px; color: var(--text-2); min-height: 21px; }
+.chart { position: relative; height: 210px; }
+.chart.tall { height: 560px; }
+.section-title { font-family: var(--font-display); font-weight: 700; font-size: 19px; margin: 8px 0 0; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--late); font-weight: 600; }
+footer { font-size: 13px; color: var(--text-2); }
+footer a { color: var(--accent); }
+@media (max-width: 760px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid { grid-template-columns: 1fr; }
+  select { min-width: 0; width: 100%; }
+  .filter { width: 100%; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">On-demand delivery operations · 30-minute promise</p>
+      <h1>What makes deliveries late?</h1>
+      <p class="sub">45,593 orders across 22 Indian cities and 1,320 delivery partners (Feb–Apr 2022). An order counts as late when it takes more than 30 minutes.</p>
+    </div>
+    <div class="filter">
+      <label for="city">City</label>
+      <select id="city"></select>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Headline numbers">
+    <div class="kpi"><div class="label">Orders</div><div class="value" id="k-orders">–</div><div class="note" id="k-orders-n">&nbsp;</div></div>
+    <div class="kpi"><div class="label">Average delivery time</div><div class="value" id="k-avg">–</div><div class="note">minutes</div></div>
+    <div class="kpi alert"><div class="label">Late rate</div><div class="value" id="k-late">–</div><div class="note">over 30 minutes</div></div>
+    <div class="kpi"><div class="label">Delivery partners</div><div class="value" id="k-partners">–</div><div class="note">active in period</div></div>
+  </section>
+
+  <h2 class="section-title">What drives late orders</h2>
+  <section class="grid">
+    <div class="card"><h2>Road traffic</h2><p class="cap" id="cap-traffic"></p><div class="chart"><canvas id="c-traffic" role="img" aria-label="Late rate by traffic level"></canvas></div></div>
+    <div class="card"><h2>Time of day</h2><p class="cap" id="cap-slot"></p><div class="chart"><canvas id="c-slot" role="img" aria-label="Late rate by time of day"></canvas></div></div>
+    <div class="card"><h2>Orders stacked on one partner</h2><p class="cap" id="cap-stack"></p><div class="chart"><canvas id="c-stack" role="img" aria-label="Late rate by number of stacked orders"></canvas></div></div>
+    <div class="card"><h2>Distance to customer</h2><p class="cap" id="cap-distance"></p><div class="chart"><canvas id="c-distance" role="img" aria-label="Late rate by distance"></canvas></div></div>
+    <div class="card"><h2>Weather</h2><p class="cap" id="cap-weather"></p><div class="chart"><canvas id="c-weather" role="img" aria-label="Late rate by weather"></canvas></div></div>
+    <div class="card"><h2>Partner rating</h2><p class="cap" id="cap-rating"></p><div class="chart"><canvas id="c-rating" role="img" aria-label="Late rate by partner rating"></canvas></div></div>
+  </section>
+
+  <div class="card">
+    <h2>Late rate by city</h2>
+    <p class="cap">All 22 cities sit between 29% and 33%. Conditions matter far more than location. Selected city in blue.</p>
+    <div class="chart tall"><canvas id="c-city" role="img" aria-label="Late rate by city"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Recommended actions</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Problem</th><th>Late rate</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Dinner rush (6–10 pm): ~42% of orders, 3 in 4 in jammed traffic</td><td class="num">46%</td><td>Add partners and position them inside busy zones before 6 pm</td></tr>
+          <tr><td>Partner carrying 2+ extra orders</td><td class="num">100%</td><td>Cap batching at one extra order per partner</td></tr>
+          <tr><td>Customer more than 10 km away</td><td class="num">45%</td><td>Tighten service radius; dispatch from the nearest micro-market</td></tr>
+          <tr><td>Festival days</td><td class="num">100%</td><td>Schedule surge staffing ahead of known festival dates</td></tr>
+          <tr><td>Partners rated below 4.5</td><td class="num">84%</td><td>Flag early for coaching and lighter order loads</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>Data: <a href="https://www.kaggle.com/datasets/gauravmalik26/food-delivery-dataset">Food Delivery Dataset (Kaggle)</a>. Analysis and SQL: <a href="https://github.com/nidhiepnayak/delivery-ops-analytics">github.com/nidhiepnayak/delivery-ops-analytics</a>. Built by Nidhie.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+const ALL = "All cities";
+const charts = {};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = n => n.toLocaleString("en-IN");
+
+function sumRows(dim, city) {
+  const d = DATA.dims[dim];
+  const cities = city === ALL ? Object.keys(d.rows) : [city];
+  return d.cats.map((cat, i) => {
+    let n = 0, late = 0, mins = 0;
+    for (const c of cities) { const r = d.rows[c]?.[i]; if (r) { n += r[0]; late += r[1]; mins += r[2]; } }
+    return { cat, n, late, mins, pct: n ? 100 * late / n : null };
+  }).filter(r => r.n > 0);
+}
+
+const valueLabels = {
+  id: "valueLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.fillStyle = css("--text");
+    ctx.font = "13px " + css("--font-body");
+    ctx.textBaseline = "middle";
+    chart.getDatasetMeta(0).data.forEach((bar, i) => {
+      const v = chart.data.datasets[0].data[i];
+      if (v != null) ctx.fillText(Math.round(v) + "%", bar.x + 6, bar.y);
+    });
+    ctx.restore();
+  }
+};
+
+function drawBar(id, rows, highlight, max) {
+  const colors = rows.map(r => highlight(r) ? css("--accent") : css("--muted"));
+  const cfg = {
+    type: "bar",
+    data: { labels: rows.map(r => r.cat.replace("Evening snack", "Evening")), datasets: [{ data: rows.map(r => r.pct), backgroundColor: colors,
+      borderRadius: { topRight: 4, bottomRight: 4 }, borderSkipped: false, maxBarThickness: 22, barPercentage: .7 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 40 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const r = rows[c.dataIndex];
+          return [`${r.pct.toFixed(1)}% late`, `${fmt(r.n)} orders`, `avg ${(r.mins / r.n).toFixed(1)} min`];
+        } } }
+      },
+      scales: {
+        x: { min: 0, max, ticks: { stepSize: max >= 100 ? 25 : 20, callback: v => v + "%", color: css("--text-2") }, grid: { color: css("--line") }, border: { display: false } },
+        y: { ticks: { color: css("--text-2"), font: { size: innerWidth < 500 ? 12 : 13 } }, grid: { display: false }, border: { color: css("--line") } }
+      }
+    },
+    plugins: [valueLabels]
+  };
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function caption(rows) {
+  const s = [...rows].sort((a, b) => b.pct - a.pct);
+  const hi = s[0], lo = s[s.length - 1];
+  return `${hi.cat}: ${Math.round(hi.pct)}% late vs ${lo.cat}: ${Math.round(lo.pct)}%`;
+}
+
+function render() {
+  const city = document.getElementById("city").value;
+  Chart.defaults.font.family = css("--font-body");
+
+  const all = sumRows("city", city);
+  const n = all.reduce((a, r) => a + r.n, 0), late = all.reduce((a, r) => a + r.late, 0), mins = all.reduce((a, r) => a + r.mins, 0);
+  document.getElementById("k-orders").textContent = fmt(n);
+  document.getElementById("k-orders-n").textContent = city === ALL ? "22 cities" : city;
+  document.getElementById("k-avg").textContent = (mins / n).toFixed(1);
+  document.getElementById("k-late").textContent = (100 * late / n).toFixed(1) + "%";
+  document.getElementById("k-partners").textContent = fmt(city === ALL
+    ? Object.values(DATA.partners).reduce((a, b) => a + b, 0) : DATA.partners[city]);
+
+  for (const dim of ["traffic", "slot", "stack", "distance", "weather", "rating"]) {
+    const rows = sumRows(dim, city);
+    const top = Math.max(...rows.map(r => r.pct));
+    drawBar("c-" + dim, rows, r => r.pct >= top - 0.01 || (dim !== "slot" && r.pct >= 40), top > 60 ? 100 : 60);
+    document.getElementById("cap-" + dim).textContent = caption(rows);
+  }
+
+  const cityRows = sumRows("city", ALL).sort((a, b) => b.pct - a.pct);
+  drawBar("c-city", cityRows, r => r.cat === city, 40);
+  charts["c-city"].options.scales.x.ticks.stepSize = 10; charts["c-city"].update();
+}
+
+const sel = document.getElementById("city");
+[ALL, ...DATA.cities].forEach(c => sel.add(new Option(c, c)));
+try { const saved = localStorage.getItem("city"); if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved; } catch (e) {}
+sel.addEventListener("change", () => { try { localStorage.setItem("city", sel.value); } catch (e) {} render(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+render();
+</script>
